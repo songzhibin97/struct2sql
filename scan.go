@@ -131,7 +131,12 @@ func (s *Struct2Sql) scan(val interface{}) (*meta, error) {
 		vField := v.Field(i)
 		tField := t.Field(i)
 		name := tField.Name
-		p := pair{model: _default, key: name, tags: s.parseTag(tField)}
+
+		tags, ok := s.parseTag(tField)
+		if !ok {
+			continue
+		}
+		p := pair{model: _default, key: name, tags: tags}
 		if !vField.IsValid() {
 			continue
 		}
@@ -180,7 +185,10 @@ func (s *Struct2Sql) scan(val interface{}) (*meta, error) {
 						continue
 					}
 					p.model = _many2many
-					tags := s.parseTag(toField.Field(j))
+					tags, ok = s.parseTag(toField.Field(j))
+					if !ok {
+						continue
+					}
 					// p.extra = now struct filed name ; opposite end filed name ; tripartite table name
 					p.extra += ";" + bternaryexpr.TernaryExpr(tags[RelationField] == "", nTovField.Name()+"ID", tags[RelationField])
 					p.extra += ";"
@@ -214,8 +222,11 @@ func (s *Struct2Sql) getTableName(p reflect.Type) string {
 	return value[0].String()
 }
 
-func (s *Struct2Sql) parseTag(field reflect.StructField) map[string]string {
+func (s *Struct2Sql) parseTag(field reflect.StructField) (map[string]string, bool) {
 	tag := field.Tag.Get(s.tag)
+	if tag == "-" {
+		return nil, false
+	}
 	res := make(map[string]string)
 	for _, ident := range strings.Split(tag, s.splitIdent) {
 		ident = strings.TrimSpace(ident)
@@ -225,5 +236,5 @@ func (s *Struct2Sql) parseTag(field reflect.StructField) map[string]string {
 		list := strings.SplitN(ident, ":", 2)
 		res[list[0]] = bternaryexpr.TernaryExpr(len(list) == 2, list[1], "")
 	}
-	return res
+	return res, true
 }
